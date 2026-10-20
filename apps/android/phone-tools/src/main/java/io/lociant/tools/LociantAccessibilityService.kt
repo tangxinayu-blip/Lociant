@@ -15,6 +15,7 @@ import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import io.lociant.core.util.jsonError
 import io.lociant.core.util.jsonOk
 import org.json.JSONArray
@@ -64,7 +65,10 @@ class LociantAccessibilityService : AccessibilityService() {
         screenshotMaxWidth: Int = DEFAULT_SCREENSHOT_MAX_WIDTH,
         screenshotQuality: Int = DEFAULT_SCREENSHOT_QUALITY,
     ): JSONObject {
-        val root = rootInActiveWindow ?: return unavailable("No active accessibility window.")
+        val selection = selectReadableRoot()
+        val root = selection.root ?: return unavailable("No accessible application window.")
+            .put("activeRoot", selection.activeRoot)
+            .put("windowRoots", selection.windowRoots)
         val nodes = JSONArray()
         val lines = mutableListOf<String>()
         val cache = linkedMapOf<String, CachedNode>()
@@ -98,6 +102,10 @@ class LociantAccessibilityService : AccessibilityService() {
                 .put("query", filter)
                 .put("exact", exact)
                 .put("cacheSize", cache.size)
+                .put("rootSource", selection.source)
+                .put("activeRoot", selection.activeRoot)
+                .put("selectedRoot", describeRoot(root))
+                .put("windowRoots", selection.windowRoots)
                 .put("message", "Use nodeId with ui_click_node for semantic actions; use ui_gesture only as a coordinate fallback.")
             if (includeScreenshot) {
                 result.put("screenshot", takeScreenShot(screenshotMaxWidth, screenshotQuality))
@@ -107,6 +115,53 @@ class LociantAccessibilityService : AccessibilityService() {
             root.recycle()
         }
     }
+
+    private data class RootSelection(
+        val root: AccessibilityNodeInfo?,
+        val source: String,
+        val activeRoot: JSONObject,
+        val windowRoots: JSONArray,
+    )
+
+    /** An overlay can be the active window while the application underneath is interactive. */
+    private fun selectReadableRoot(): RootSelection {
+        val active = rootInActiveWindow
+        val activeInfo = describeRoot(active)
+        val candidates = JSONArray()
+        if (active != null && active.childCount > 0) {
+            return RootSelection(active, "active", activeInfo, candidates)
+        }
+
+        var fallback: AccessibilityNodeInfo? = null
+        for (window in windows) {
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val candidate = window.root
+            candidates.put(
+                describeRoot(candidate)
+                    .put("windowId", window.id)
+                    .put("active", window.isActive)
+                    .put("focused", window.isFocused)
+                    .put("layer", window.layer),
+            )
+            if (candidate != null && candidate.childCount > 0 && fallback == null) {
+                fallback = candidate
+            } else {
+                candidate?.recycle()
+            }
+        }
+        if (fallback != null) {
+            active?.recycle()
+            return RootSelection(fallback, "application_window", activeInfo, candidates)
+        }
+        return RootSelection(active, "active", activeInfo, candidates)
+    }
+
+    private fun describeRoot(node: AccessibilityNodeInfo?): JSONObject = JSONObject()
+        .put("available", node != null)
+        .put("packageName", node?.packageName?.toString().orEmpty())
+        .put("className", node?.className?.toString().orEmpty())
+        .put("childCount", node?.childCount ?: 0)
+        .put("visible", node?.isVisibleToUser ?: false)
 
     fun clickNode(nodeId: String, longClick: Boolean = false): JSONObject {
         require(nodeId.isNotBlank()) { "nodeId is required" }
@@ -121,7 +176,7 @@ class LociantAccessibilityService : AccessibilityService() {
                 .put("nodeId", nodeId)
                 .put("target", cached.toJson())
         }
-        val root = rootInActiveWindow
+        val root = selectReadableRoot().root
         if (root != null) {
             try {
                 findNode(root, cached.path)?.let { node ->
@@ -154,7 +209,7 @@ class LociantAccessibilityService : AccessibilityService() {
                 .put("code", "node_not_found")
                 .put("nodeId", nodeId)
                 .put("message", "Node is not in the latest screen_context cache. Call screen_context again.")
-        val root = rootInActiveWindow ?: return unavailable("No active accessibility window.").put("nodeId", nodeId)
+        val root = selectReadableRoot().root ?: return unavailable("No accessible application window.").put("nodeId", nodeId)
         try {
             val node = findNode(root, cached.path)
                 ?: return JSONObject()
@@ -199,7 +254,7 @@ class LociantAccessibilityService : AccessibilityService() {
     }
 
     fun pasteIntoFocusedText(textLength: Int = 0): JSONObject {
-        val root = rootInActiveWindow ?: return unavailable("No active accessibility window.")
+        val root = selectReadableRoot().root ?: return unavailable("No accessible application window.")
         try {
             val focused = findPasteTarget(root)
                 ?: return JSONObject()
