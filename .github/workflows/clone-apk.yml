@@ -60,7 +60,7 @@ jobs:
           printf 'sdk.dir=%s\nflutter.sdk=%s\n' \
             "$ANDROID_SDK_ROOT" "$FLUTTER_ROOT" > local.properties
 
-      - name: Build side-by-side diagnostic APK
+      - name: Build clone with original accessibility flags
         working-directory: apps/android
         env:
           LOCIANT_CLONE: '1'
@@ -68,7 +68,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lociant-clone-diagnostic-apk
+          name: lociant-clone-original-flags-apk
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
