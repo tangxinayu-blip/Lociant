@@ -21,9 +21,13 @@ impl IpcDeviceAdapter {
     pub const PORT_ENV: &'static str = "LOCIANT_DEVICE_PORT";
 
     fn request(&self, payload: &Value) -> Result<Value, String> {
+        self.request_with_timeout(payload, Duration::from_secs(10))
+    }
+
+    fn request_with_timeout(&self, payload: &Value, read_timeout: Duration) -> Result<Value, String> {
         let stream = TcpStream::connect(("127.0.0.1", self.port))
             .map_err(|error| format!("device adapter connect failed: {error}"))?;
-        stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
+        stream.set_read_timeout(Some(read_timeout)).ok();
         stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
         let mut stream = stream;
         let mut line = payload.to_string();
@@ -121,7 +125,14 @@ impl DeviceAdapter for IpcDeviceAdapter {
             "name": name,
             "arguments": arguments,
         });
-        let response = self.request(&request).map_err(ToolError::Adapter)?;
+        // Waking and dismissing a keyguard can legitimately take longer than
+        // the short timeout used for ordinary device tools.
+        let timeout = if name == "device_wake" {
+            Duration::from_secs(30)
+        } else {
+            Duration::from_secs(10)
+        };
+        let response = self.request_with_timeout(&request, timeout).map_err(ToolError::Adapter)?;
         Ok(map_result(response))
     }
 }
