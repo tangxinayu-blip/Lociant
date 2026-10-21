@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import io.lociant.core.tools.*
 import io.lociant.tools.LociantAccessibilityService
 import io.lociant.tools.runtime.DeviceInteraction
+import io.lociant.tools.runtime.DeviceWake
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -36,6 +37,20 @@ class AndroidTools(
             name = "device_status",
             description = "Return Android device state, battery, network, screen, and permission readiness.",
         ) { deviceStatus() },
+        tool(
+            name = "device_wake",
+            description = "Turn on the Android screen and, when requested, dismiss a non-secure keyguard. Returns the observed screen and lock state; a request being accepted alone is not success.",
+            properties = JSONObject()
+                .put("dismissKeyguard", boolParam("Dismiss an ordinary lock screen after waking. Default true. A PIN, password, or pattern is never bypassed."))
+                .put("holdMs", intParam("Keep the screen awake temporarily, from 15,000 to 300,000 ms. Default 120,000 ms.")),
+            policy = actionPolicy,
+        ) { args ->
+            DeviceWake.wake(
+                context,
+                dismissKeyguard = args.optBoolean("dismissKeyguard", true),
+                holdMs = args.optLong("holdMs", 120_000L).coerceIn(15_000L, 300_000L),
+            )
+        },
         tool(
             name = "clipboard_read",
             description = "Read current Android clipboard text when Android allows clipboard access.",

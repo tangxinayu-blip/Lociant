@@ -9,4 +9,10 @@
         <item name="android:navigationBarColor">#00000000</item>
         <item name="android:fontFamily">sans</item>
     </style>
+
+    <style name="DeviceWakeTheme" parent="android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowShowWhenLocked">true</item>
+        <item name="android:windowTurnScreenOn">true</item>
+    </style>
 </resources>

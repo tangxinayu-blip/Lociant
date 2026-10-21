@@ -409,6 +409,23 @@ class LociantAccessibilityService : AccessibilityService() {
             .put("from", JSONObject().put("x", x1).put("y", y1))
             .put("to", JSONObject().put("x", x2).put("y", y2))
 
+    /** Some accessibility-enabled lock screens ask for two simultaneous fingers. */
+    fun gestureTwoFingerSwipe(x1: Int, x2: Int, startY: Int, endY: Int, durationMs: Long): JSONObject {
+        val first = Path().apply {
+            moveTo(x1.toFloat(), startY.toFloat())
+            lineTo(x1.toFloat(), endY.toFloat())
+        }
+        val second = Path().apply {
+            moveTo(x2.toFloat(), startY.toFloat())
+            lineTo(x2.toFloat(), endY.toFloat())
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(first, 0, durationMs))
+            .addStroke(GestureDescription.StrokeDescription(second, 0, durationMs))
+            .build()
+        return dispatchGesture("two_finger_swipe", gesture, durationMs)
+    }
+
     fun pressBack(): Boolean = performGlobalActionOnMain(GLOBAL_ACTION_BACK)
     fun pressHome(): Boolean = performGlobalActionOnMain(GLOBAL_ACTION_HOME)
     fun pressRecentApps(): Boolean = performGlobalActionOnMain(GLOBAL_ACTION_RECENTS)

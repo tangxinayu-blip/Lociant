@@ -2,8 +2,10 @@ package io.lociant.tools.runtime
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.PowerManager
+import android.view.Display
 import org.json.JSONObject
 
 object DeviceInteraction {
@@ -23,11 +25,13 @@ object DeviceInteraction {
             power?.isScreenOn == true
         }
         val locked = keyguard?.isKeyguardLocked == true
+        val display = context.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)
+        val screenOn = display?.state == Display.STATE_ON || (display == null && interactive)
         return JSONObject()
             .put("interactive", interactive)
-            .put("screenOn", interactive)
+            .put("screenOn", screenOn)
             .put("keyguardLocked", locked)
             .put("activityForeground", activityForeground)
-            .put("visionInteractive", interactive && !locked)
+            .put("visionInteractive", interactive && screenOn && !locked)
     }
 }
